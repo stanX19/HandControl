@@ -18,16 +18,17 @@ class HandCursorControl:
         self.frame_width = 640
         self.frame_height = 480
 
-        # Mapping factor (adjust to make the mapping larger)
-        self.mapping_factor = 4.0  # Example: 2.0 means map hand movement to twice the screen size
+        # Mapping factor
+        self.mapping_factor = 4.0
 
-        # Flag to track if left mouse button is held
+        # Flags to track mouse button states
         self.left_click_held = False
+        self.right_click_clicked = False
 
         # Debug visualization
         self.debug_mode = True
 
-        # Wrist landmark index
+        # Wrist landmark index.
         self.wrist_landmark = 0
 
     def process_frame(self, frame):
@@ -40,7 +41,7 @@ class HandCursorControl:
         if hands:
             hand = hands[0]  # Assuming only one hand
             lm_list = hand["lmList"]  # List of landmark coordinates
-            fingers = self.detector.fingersUp(hand)
+            fingers = self.detector.fingersUp(hand)  # Get finger states
 
             # Check if wrist landmark is detected
             if lm_list and len(lm_list) > self.wrist_landmark:
@@ -60,28 +61,47 @@ class HandCursorControl:
                 # Move the mouse cursor
                 pyautogui.moveTo(screen_x, screen_y)
 
-                # Determine mouse click state based on finger state (index)
-                if not fingers[1]:  # Index finger is closed
+                # Handle mouse clicks based on finger states
+                index_finger_closed = not fingers[1]
+                middle_finger_closed = not fingers[2]
+
+                if index_finger_closed:
                     if not self.left_click_held:
-                        pyautogui.mouseDown()
+                        pyautogui.mouseDown(button='left')
                         self.left_click_held = True
-                else:  # Index finger is open
+                else:
                     if self.left_click_held:
-                        pyautogui.mouseUp()
+                        pyautogui.mouseUp(button='left')
                         self.left_click_held = False
 
-                # Debug visualization: Draw a circle on the wrist
+                if middle_finger_closed:
+                    if not self.right_click_clicked:
+                        pyautogui.mouseDown(button='right')
+                        self.right_click_clicked = True
+                        pyautogui.mouseUp(button='right')
+                else:
+                    if self.right_click_clicked:
+                        self.right_click_clicked = False
+
+                # Debug visualization: Draw circles on the wrist and finger tips
                 if self.debug_mode:
-                    cv2.circle(frame, (wrist_x, wrist_y), 10, (255, 165, 0), cv2.FILLED)  # Orange color
-                    cv2.circle(frame, (lm_list[8][0], lm_list[8][1]), 5, (255, 0, 255), cv2.FILLED) # Show index finger tip
+                    cv2.circle(frame, (wrist_x, wrist_y), 10, (255, 165, 0), cv2.FILLED)  # Orange for wrist
+                    if lm_list and len(lm_list) > 8:
+                        cv2.circle(frame, (lm_list[8][0], lm_list[8][1]), 5, (255, 0, 255), cv2.FILLED)  # Magenta for index finger tip
+                    if lm_list and len(lm_list) > 12:
+                        cv2.circle(frame, (lm_list[12][0], lm_list[12][1]), 5, (0, 255, 255), cv2.FILLED)  # Yellow for middle finger tip
 
         else:
-            # If no hand is detected, release the mouse button
+            # If no hand is detected, release all mouse buttons
             if self.left_click_held:
-                pyautogui.mouseUp()
+                pyautogui.mouseUp(button='left')
                 self.left_click_held = False
+            if self.right_click_clicked:
+                self.right_click_clicked = False
 
         return frame
+
+
 
 class CursorControlApp:
     def __init__(self):
@@ -93,10 +113,12 @@ class CursorControlApp:
     def start(self):
         """Start the hand cursor control application."""
         self.running = True
-        print("Hand Wrist Cursor Control - Expanded Mapping - Started")
+        print("Hand Wrist Cursor Control - v2 - Started")
         print("Move your wrist to control the cursor (expanded range).")
         print("Close your index finger to hold left click.")
-        print("Open your index finger to release left click.")
+        print("Close your middle finger to hold right click.")
+        print("Close both index and middle fingers to left click and release.")
+        print("Open fingers to release clicks.")
         print("Press 'q' to quit")
 
         try:
@@ -106,8 +128,7 @@ class CursorControlApp:
 
     def run_loop(self):
         """Main processing loop."""
-        WIN_NAME = 'Hand Wrist Cursor Control - Expanded Mapping'
-
+        WIN_NAME = 'Hand Wrist Cursor Control - v2'
         while self.running and self.cap.isOpened():
             ret, frame = self.cap.read()
             if not ret:
@@ -133,9 +154,11 @@ class CursorControlApp:
         """Release resources when application exits."""
         self.cap.release()
         cv2.destroyAllWindows()
-        print("Hand Wrist Cursor Control - Expanded Mapping - Stopped")
+        print("Hand Wrist Cursor Control - v2 - Stopped")
+
 
 
 if __name__ == "__main__":
+    pyautogui.FAILSAFE = False
     app = CursorControlApp()
     app.start()

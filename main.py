@@ -8,7 +8,7 @@ import time
 class HandGestureTracker:
     def __init__(self):
         # Initialize HandDetector from cvzone
-        self.detector = HandDetector(staticMode=False, maxHands=1, minTrackCon=0.5)
+        self.detector = HandDetector(staticMode=False, maxHands=2, minTrackCon=0.5)
 
         # Parameters for gesture detection
         self.swipe_speed_threshold = 400  # swipe speed
