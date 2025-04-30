@@ -17,7 +17,7 @@ cd HandControl
 Make sure you are using **Python 3.8+**. Install the required packages:
 
 ```bash
-pip install -r requirements.txt
+py -m pip install -r requirements.txt
 ```
 
 ---
@@ -27,10 +27,13 @@ pip install -r requirements.txt
 Once inside the project folder:
 
 ```bash
-python main.py
+py main.py
 ```
 
-Your webcam will activate, and the window will open. You can now use swipe gestures to control the arrow keys.
+1) Your webcam will activate, and a window will open showing the detected hands.
+2) You can try to swipe and see if its detected, and familiarise yourself with the camara range.
+3) Minimize the window and click (focus) on the content you want to swipe
+4) Now you can use swipe gestures to control left right up down
 
 ---
 
@@ -44,11 +47,19 @@ Your webcam will activate, and the window will open. You can now use swipe gestu
 ### Notes:
 - Only your **right hand** is tracked.
 - Gestures are recognized when you move your hand **actively** (at least 1 finger up).
-- Swipes must be **deliberate** and happen within a **1-second window**.
+- Swipes must be **fast** and happen within a **1-second window**.
 - There is a **1.5-second cooldown** after each detected swipe to prevent duplicates.
 - The app tolerates brief hand disappearance or closure during a swipe motion.
 
 Press **`q`** or close the window to exit.
+
+---
+
+## 📸 Snapshots
+
+Left Swipe Example
+
+![Left swipe](snapshots/left_swipe.png)
 
 ---
 
