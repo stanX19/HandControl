@@ -3,6 +3,43 @@ from cvzone.HandTrackingModule import HandDetector
 import pyautogui
 import time
 
+class ClickStatus:
+    UP = 0
+    PENDING = 1
+    DOWN = 2
+
+class ClickHandler:
+    def __init__(self, button: str, threshold=0.5):
+        """
+
+        :param button: ["left", "right"]
+        """
+        self._threshold = threshold
+        self._button = button
+        self._prev_time = None
+        self._status = ClickStatus.UP
+
+    def update(self, finger_down: bool):
+        if self._status == ClickStatus.UP:
+            if finger_down:
+                self._prev_time = time.time()
+                self._status = ClickStatus.PENDING
+
+        elif self._status == ClickStatus.PENDING:
+            if time.time() < self._prev_time + self._threshold:
+                return
+            if finger_down:
+                pyautogui.mouseDown(button=self._button)
+                self._status = ClickStatus.DOWN
+            else:
+                pyautogui.mouseDown(button=self._button)
+                pyautogui.mouseUp(button=self._button)
+                self._status = ClickStatus.UP
+
+        elif self._status == ClickStatus.DOWN:
+            if not finger_down:
+                pyautogui.mouseUp(button=self._button)
+                self._status = ClickStatus.UP
 
 class HandCursorControl:
     def __init__(self):
@@ -22,14 +59,57 @@ class HandCursorControl:
         self.mapping_factor = 4.0
 
         # Flags to track mouse button states
-        self.left_click_held = False
-        self.right_click_clicked = False
+        self.left_handler = ClickHandler("left")
+        self.right_handler = ClickHandler("right")
 
         # Debug visualization
         self.debug_mode = True
 
         # Wrist landmark index.
         self.wrist_landmark = 0
+
+    def process_hand(self, hand, frame):
+        lm_list = hand["lmList"]  # List of landmark coordinates
+        fingers = self.detector.fingersUp(hand)  # Get finger states
+
+        # Check if wrist landmark is detected
+        if lm_list and len(lm_list) < self.wrist_landmark:
+            return
+
+        wrist_x, wrist_y = lm_list[self.wrist_landmark][0], lm_list[self.wrist_landmark][1]
+
+        # Map hand coordinates to a larger virtual screen
+        virtual_screen_width = self.frame_width * self.mapping_factor
+        virtual_screen_height = self.frame_height * self.mapping_factor
+
+        mapped_x = (wrist_x / self.frame_width) * virtual_screen_width - (
+                    virtual_screen_width - self.screen_width) / 2
+        mapped_y = (wrist_y / self.frame_height) * virtual_screen_height - (
+                    virtual_screen_height - self.screen_height) / 2 - 300
+
+        # Clamp the mapped coordinates to the actual screen boundaries
+        screen_x = int(max(0, min(mapped_x, self.screen_width - 1)))
+        screen_y = int(max(0, min(mapped_y, self.screen_height - 1)))
+
+        # Move the mouse cursor
+        pyautogui.moveTo(screen_x, screen_y)
+
+        # Handle mouse clicks based on finger states
+        index_finger_closed = not fingers[1]
+        middle_finger_closed = not fingers[2]
+
+        self.left_handler.update(index_finger_closed)
+        self.right_handler.update(middle_finger_closed)
+
+        # Debug visualization: Draw circles on the wrist and finger tips
+        if self.debug_mode:
+            cv2.circle(frame, (wrist_x, wrist_y), 10, (255, 165, 0), cv2.FILLED)  # Orange for wrist
+            if lm_list and len(lm_list) > 8:
+                cv2.circle(frame, (lm_list[8][0], lm_list[8][1]), 5, (255, 0, 255),
+                           cv2.FILLED)  # Magenta for index finger tip
+            if lm_list and len(lm_list) > 12:
+                cv2.circle(frame, (lm_list[12][0], lm_list[12][1]), 5, (0, 255, 255),
+                           cv2.FILLED)  # Yellow for middle finger tip
 
     def process_frame(self, frame):
         frame_height, frame_width = frame.shape[:2]
@@ -39,68 +119,12 @@ class HandCursorControl:
         hands, frame = self.detector.findHands(frame, draw=False)
 
         if hands:
-            hand = hands[0]  # Assuming only one hand
-            lm_list = hand["lmList"]  # List of landmark coordinates
-            fingers = self.detector.fingersUp(hand)  # Get finger states
-
-            # Check if wrist landmark is detected
-            if lm_list and len(lm_list) > self.wrist_landmark:
-                wrist_x, wrist_y = lm_list[self.wrist_landmark][0], lm_list[self.wrist_landmark][1]
-
-                # Map hand coordinates to a larger virtual screen
-                virtual_screen_width = self.frame_width * self.mapping_factor
-                virtual_screen_height = self.frame_height * self.mapping_factor
-
-                mapped_x = (wrist_x / self.frame_width) * virtual_screen_width - (virtual_screen_width - self.screen_width) / 2
-                mapped_y = (wrist_y / self.frame_height) * virtual_screen_height - (virtual_screen_height - self.screen_height) / 2 - 300
-
-                # Clamp the mapped coordinates to the actual screen boundaries
-                screen_x = int(max(0, min(mapped_x, self.screen_width - 1)))
-                screen_y = int(max(0, min(mapped_y, self.screen_height - 1)))
-
-                # Move the mouse cursor
-                pyautogui.moveTo(screen_x, screen_y)
-
-                # Handle mouse clicks based on finger states
-                index_finger_closed = not fingers[1]
-                middle_finger_closed = not fingers[2]
-
-                if index_finger_closed:
-                    if not self.left_click_held:
-                        pyautogui.mouseDown(button='left')
-                        self.left_click_held = True
-                else:
-                    if self.left_click_held:
-                        pyautogui.mouseUp(button='left')
-                        self.left_click_held = False
-
-                if middle_finger_closed:
-                    if not self.right_click_clicked:
-                        pyautogui.mouseDown(button='right')
-                        self.right_click_clicked = True
-                        pyautogui.mouseUp(button='right')
-                else:
-                    if self.right_click_clicked:
-                        self.right_click_clicked = False
-
-                # Debug visualization: Draw circles on the wrist and finger tips
-                if self.debug_mode:
-                    cv2.circle(frame, (wrist_x, wrist_y), 10, (255, 165, 0), cv2.FILLED)  # Orange for wrist
-                    if lm_list and len(lm_list) > 8:
-                        cv2.circle(frame, (lm_list[8][0], lm_list[8][1]), 5, (255, 0, 255), cv2.FILLED)  # Magenta for index finger tip
-                    if lm_list and len(lm_list) > 12:
-                        cv2.circle(frame, (lm_list[12][0], lm_list[12][1]), 5, (0, 255, 255), cv2.FILLED)  # Yellow for middle finger tip
-
+            self.process_hand(hands[0], frame)
         else:
-            # If no hand is detected, release all mouse buttons
-            if self.left_click_held:
-                pyautogui.mouseUp(button='left')
-                self.left_click_held = False
-            if self.right_click_clicked:
-                self.right_click_clicked = False
+            self.left_handler.update(False)
+            self.left_handler.update(False)
 
         return frame
-
 
 
 class CursorControlApp:
@@ -128,7 +152,7 @@ class CursorControlApp:
 
     def run_loop(self):
         """Main processing loop."""
-        WIN_NAME = 'Hand Wrist Cursor Control - v2'
+        WIN_NAME = 'Hand Wrist Cursor Control - v3'
         while self.running and self.cap.isOpened():
             ret, frame = self.cap.read()
             if not ret:
@@ -154,7 +178,7 @@ class CursorControlApp:
         """Release resources when application exits."""
         self.cap.release()
         cv2.destroyAllWindows()
-        print("Hand Wrist Cursor Control - v2 - Stopped")
+        print("Hand Wrist Cursor Control - v3 - Stopped")
 
 
 
