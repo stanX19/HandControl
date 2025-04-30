@@ -35,7 +35,10 @@ class HandGestureTracker:
     @staticmethod
     def is_hand_active(fingers):
         """Check if the hand is generally active (at least 2 fingers up)."""
-        return 2 <= sum(fingers) <= 5 or fingers[0]
+        return 1 <= sum(fingers) <= 5
+        # return (fingers == [0, 1, 1, 0, 0]
+        #     or fingers == [1, 0, 0, 1, 1]
+        #     or fingers == [1, 0, 0, 0, 0])
 
     def process_frame(self, frame):
         current_time = time.time()
@@ -53,13 +56,14 @@ class HandGestureTracker:
             if hand["type"] == "Right":  # its actually left
                 continue
             fingers = self.detector.fingersUp(hand)
+            index_tip = hand["lmList"][8]
             center = hand["center"]
             is_active = self.is_hand_active(fingers)
 
             hand_status = "active" if is_active else "Closed"
 
             # Add to hand history
-            self.hand_history.append((current_time, center, is_active))
+            self.hand_history.append((current_time, index_tip, is_active))
 
             # Clean up old history entries
             self.clean_history(current_time)
